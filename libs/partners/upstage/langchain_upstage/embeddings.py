@@ -31,8 +31,8 @@ from langchain_core.utils import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_EMBED_BATCH_SIZE = 4
-MAX_EMBED_BATCH_SIZE = 2048
+DEFAULT_EMBED_BATCH_SIZE = 10
+MAX_EMBED_BATCH_SIZE = 100
 
 
 class UpstageEmbeddings(BaseModel, Embeddings):
@@ -199,7 +199,7 @@ class UpstageEmbeddings(BaseModel, Embeddings):
         """
         assert (
             len(texts) <= MAX_EMBED_BATCH_SIZE
-        ), "The batch should not be larger than 2048."
+        ), f"The batch should not be larger than {MAX_EMBED_BATCH_SIZE}."
         params = self._invocation_params
         params["model"] = params["model"] + "-passage"
         embeddings = []
@@ -241,7 +241,7 @@ class UpstageEmbeddings(BaseModel, Embeddings):
         """
         assert (
             len(texts) <= MAX_EMBED_BATCH_SIZE
-        ), "The batch should not be larger than 2048."
+        ), f"The batch should not be larger than {MAX_EMBED_BATCH_SIZE}."
         params = self._invocation_params
         params["model"] = params["model"] + "-passage"
         embeddings = []
