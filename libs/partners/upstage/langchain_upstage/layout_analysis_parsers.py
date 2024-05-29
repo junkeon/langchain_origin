@@ -4,11 +4,11 @@ import os
 import warnings
 from typing import Dict, Iterator, List, Literal, Optional, Union
 
-import fitz  # type: ignore
 import requests
-from fitz import Document as fitzDocument
 from langchain_core.document_loaders import BaseBlobParser, Blob
 from langchain_core.documents import Document
+from pypdf import PdfReader, PdfWriter
+from pypdf.errors import PdfReadError
 
 LAYOUT_ANALYSIS_URL = "https://api.upstage.ai/v1/document-ai/layout-analysis"
 
@@ -189,18 +189,16 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
 
         except requests.RequestException as req_err:
             # Handle any request-related exceptions
-            print(f"Request Exception: {req_err}")
             raise ValueError(f"Failed to send request: {req_err}")
         except json.JSONDecodeError as json_err:
             # Handle JSON decode errors
-            print(f"JSON Decode Error: {json_err}")
             raise ValueError(f"Failed to decode JSON response: {json_err}")
 
         return []
 
     def _split_and_request(
         self,
-        full_docs: fitzDocument,
+        full_docs: PdfReader,
         start_page: int,
         num_pages: int = DEFAULT_NUMBER_OF_PAGE,
     ) -> List:
@@ -209,7 +207,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
         server.
 
         Args:
-            full_docs (str): The full document to be split and requested.
+            full_docs (PdfReader): The full document to be split and requested.
             start_page (int): The starting page number for splitting the document.
             num_pages (int, optional): The number of pages to split the document
                                              into.
@@ -218,25 +216,24 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
         Returns:
             response: The response from the server.
         """
-        with fitz.open() as chunk_pdf:
-            chunk_pdf.insert_pdf(
-                full_docs,
-                from_page=start_page,
-                to_page=start_page + num_pages - 1,
-            )
-            pdf_bytes = chunk_pdf.write()
 
-        with io.BytesIO(pdf_bytes) as f:
-            response = self._get_response({"document": f})
+        merger = PdfWriter()
+        merger.append(full_docs, pages=(start_page, start_page + num_pages))
+
+        with io.BytesIO() as buffer:
+            merger.write(buffer)
+            buffer.seek(0)
+            response = self._get_response({"document": buffer})
 
         return response
 
-    def _element_document(self, elements: Dict) -> Document:
+    def _element_document(self, elements: Dict, start_page: int) -> Document:
         """
         Converts an elements into a Document object.
 
         Args:
-            elements: The elements to convert.
+            elements (Dict): The elements to convert.
+            start_page (int): The starting page number for splitting the document.
 
         Returns:
             A list containing a single Document object.
@@ -245,7 +242,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
         return Document(
             page_content=(parse_output(elements, self.output_type)),
             metadata={
-                "page": elements["page"],
+                "page": elements["page"] + start_page,
                 "id": elements["id"],
                 "type": self.output_type,
                 "split": self.split,
@@ -254,12 +251,13 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
             },
         )
 
-    def _page_document(self, elements: List) -> List[Document]:
+    def _page_document(self, elements: List, start_page: int) -> List[Document]:
         """
         Combines elements with the same page number into a single Document object.
 
         Args:
             elements (List): A list of elements containing page numbers.
+            start_page (int): The starting page number for splitting the document.
 
         Returns:
             List[Document]: A list of Document objects, each representing a page
@@ -281,7 +279,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
                 Document(
                     page_content=page_content,
                     metadata={
-                        "page": group[0]["page"],
+                        "page": group[0]["page"] + start_page,
                         "type": self.output_type,
                         "split": self.split,
                     },
@@ -313,11 +311,18 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
         else:
             num_pages = 1
 
-        full_docs = fitz.open(blob.path)
-        number_of_pages = full_docs.page_count
+        try:
+            full_docs = PdfReader(str(blob.path))
+            number_of_pages = full_docs.get_num_pages()
+            is_pdf = True
+        except PdfReadError:
+            number_of_pages = 1
+            is_pdf = False
+        except Exception as e:
+            raise ValueError(f"Failed to read PDF file: {e}")
 
         if self.split == "none":
-            if full_docs.is_pdf:
+            if is_pdf:
                 result = ""
                 start_page = 0
                 num_pages = DEFAULT_NUMBER_OF_PAGE
@@ -352,7 +357,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
             )
 
         elif self.split == "element":
-            if full_docs.is_pdf:
+            if is_pdf:
                 start_page = 0
                 for _ in range(number_of_pages):
                     if start_page >= number_of_pages:
@@ -360,7 +365,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
 
                     elements = self._split_and_request(full_docs, start_page, num_pages)
                     for element in elements:
-                        yield self._element_document(element)
+                        yield self._element_document(element, start_page)
 
                     start_page += num_pages
 
@@ -371,17 +376,17 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
                     elements = self._get_response({"document": f})
 
                 for element in elements:
-                    yield self._element_document(element)
+                    yield self._element_document(element, 0)
 
         elif self.split == "page":
-            if full_docs.is_pdf:
+            if is_pdf:
                 start_page = 0
                 for _ in range(number_of_pages):
                     if start_page >= number_of_pages:
                         break
 
                     elements = self._split_and_request(full_docs, start_page, num_pages)
-                    yield from self._page_document(elements)
+                    yield from self._page_document(elements, start_page)
 
                     start_page += num_pages
             else:
@@ -390,7 +395,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
                 with open(blob.path, "rb") as f:
                     elements = self._get_response({"document": f})
 
-                yield from self._page_document(elements)
+                yield from self._page_document(elements, 0)
 
         else:
             raise ValueError(f"Invalid split type: {self.split}")
