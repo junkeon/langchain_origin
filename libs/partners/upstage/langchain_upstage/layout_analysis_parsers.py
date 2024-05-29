@@ -218,7 +218,10 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
         """
 
         merger = PdfWriter()
-        merger.append(full_docs, pages=(start_page, start_page + num_pages))
+        merger.append(
+            full_docs,
+            pages=(start_page, min(start_page + num_pages, full_docs.get_num_pages())),
+        )
 
         with io.BytesIO() as buffer:
             merger.write(buffer)
