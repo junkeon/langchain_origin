@@ -1,7 +1,7 @@
 """Test Upstage layout analysis."""
 
 from pathlib import Path
-from typing import get_args
+from typing import List, get_args
 
 from langchain_upstage import UpstageLayoutAnalysisLoader
 from langchain_upstage.layout_analysis import OutputType, SplitType
@@ -24,7 +24,8 @@ def test_layout_analysis_param() -> None:
             assert loader.file_path == EXAMPLE_PDF_PATH
             assert loader.exclude == ["header", "footer"]
 
-            for exclude in [[], ["header"], ["header", "footer"]]:
+            excludes: List[List[str]] = [[], ["header"], ["header", "footer"]]
+            for exclude in excludes:
                 loader = UpstageLayoutAnalysisLoader(
                     file_path=EXAMPLE_PDF_PATH,
                     output_type=output_type,
@@ -52,7 +53,7 @@ def test_file_not_found_error() -> None:
 def test_none_split() -> None:
     """Test layout analysis with no split."""
 
-    for output_type in ["text", "html"]:
+    for output_type in get_args(OutputType):
         loader = UpstageLayoutAnalysisLoader(
             file_path=EXAMPLE_PDF_PATH,
             output_type=output_type,
@@ -68,7 +69,7 @@ def test_none_split() -> None:
 def test_element_split() -> None:
     """Test layout analysis with element split."""
 
-    for output_type in ["text", "html"]:
+    for output_type in get_args(OutputType):
         loader = UpstageLayoutAnalysisLoader(
             file_path=EXAMPLE_PDF_PATH,
             output_type=output_type,
@@ -89,7 +90,7 @@ def test_element_split() -> None:
 def test_page_split() -> None:
     """Test layout analysis with page split."""
 
-    for output_type in ["text", "html"]:
+    for output_type in get_args(OutputType):
         loader = UpstageLayoutAnalysisLoader(
             file_path=EXAMPLE_PDF_PATH,
             output_type=output_type,
