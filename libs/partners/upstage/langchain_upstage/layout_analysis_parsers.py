@@ -189,12 +189,13 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
 
         except requests.RequestException as req_err:
             # Handle any request-related exceptions
-            print(f"Request Exception: {req_err}")
             raise ValueError(f"Failed to send request: {req_err}")
         except json.JSONDecodeError as json_err:
             # Handle JSON decode errors
-            print(f"JSON Decode Error: {json_err}")
             raise ValueError(f"Failed to decode JSON response: {json_err}")
+        except Exception as err:
+            # Handle any other exceptions
+            raise ValueError(f"An error occurred: {err}")
 
         return []
 
@@ -212,8 +213,8 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
             full_docs (str): The full document to be split and requested.
             start_page (int): The starting page number for splitting the document.
             num_pages (int, optional): The number of pages to split the document
-                                             into.
-                                             Defaults to DEFAULT_NUMBER_OF_PAGE.
+                                       into.
+                                       Defaults to DEFAULT_NUMBER_OF_PAGE.
 
         Returns:
             response: The response from the server.
@@ -231,12 +232,13 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
 
         return response
 
-    def _element_document(self, elements: Dict) -> Document:
+    def _element_document(self, elements: Dict, start_page: int = 0) -> Document:
         """
         Converts an elements into a Document object.
 
         Args:
-            elements: The elements to convert.
+            elements (Dict) : The elements to convert.
+            start_page (int): The starting page number for splitting the document.
 
         Returns:
             A list containing a single Document object.
@@ -245,21 +247,20 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
         return Document(
             page_content=(parse_output(elements, self.output_type)),
             metadata={
-                "page": elements["page"],
+                "page": elements["page"] + start_page,
                 "id": elements["id"],
-                "type": self.output_type,
-                "split": self.split,
-                "bbox": elements["bounding_box"],
+                "bounding_box": json.dumps(elements["bounding_box"]),
                 "category": elements["category"],
             },
         )
 
-    def _page_document(self, elements: List) -> List[Document]:
+    def _page_document(self, elements: List, start_page: int = 0) -> List[Document]:
         """
         Combines elements with the same page number into a single Document object.
 
         Args:
             elements (List): A list of elements containing page numbers.
+            start_page (int): The starting page number for splitting the document.
 
         Returns:
             List[Document]: A list of Document objects, each representing a page
@@ -281,9 +282,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
                 Document(
                     page_content=page_content,
                     metadata={
-                        "page": group[0]["page"],
-                        "type": self.output_type,
-                        "split": self.split,
+                        "page": group[0]["page"] + start_page,
                     },
                 )
             )
@@ -346,8 +345,6 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
                 page_content=result,
                 metadata={
                     "total_pages": number_of_pages,
-                    "type": self.output_type,
-                    "split": self.split,
                 },
             )
 
@@ -360,7 +357,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
 
                     elements = self._split_and_request(full_docs, start_page, num_pages)
                     for element in elements:
-                        yield self._element_document(element)
+                        yield self._element_document(element, start_page)
 
                     start_page += num_pages
 
@@ -381,7 +378,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
                         break
 
                     elements = self._split_and_request(full_docs, start_page, num_pages)
-                    yield from self._page_document(elements)
+                    yield from self._page_document(elements, start_page)
 
                     start_page += num_pages
             else:
