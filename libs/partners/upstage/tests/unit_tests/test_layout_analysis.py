@@ -112,6 +112,9 @@ def test_element_split_text_output(mock_post: Mock) -> None:
         assert document.page_content == MOCK_RESPONSE_JSON["elements"][i]["text"]
         assert document.metadata["page"] == MOCK_RESPONSE_JSON["elements"][i]["page"]
         assert document.metadata["id"] == MOCK_RESPONSE_JSON["elements"][i]["id"]
+        assert document.metadata["bounding_box"] == json.dumps(
+            MOCK_RESPONSE_JSON["elements"][i]["bounding_box"]
+        )
 
 
 @patch("requests.post")
@@ -176,6 +179,9 @@ def test_element_split_html_output(mock_post: Mock) -> None:
         assert document.page_content == MOCK_RESPONSE_JSON["elements"][i]["html"]
         assert document.metadata["page"] == MOCK_RESPONSE_JSON["elements"][i]["page"]
         assert document.metadata["id"] == MOCK_RESPONSE_JSON["elements"][i]["id"]
+        assert document.metadata["bounding_box"] == json.dumps(
+            MOCK_RESPONSE_JSON["elements"][i]["bounding_box"]
+        )
 
 
 @patch("requests.post")
