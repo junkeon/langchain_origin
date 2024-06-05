@@ -230,13 +230,12 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
 
         return response
 
-    def _element_document(self, elements: Dict, start_page: int) -> Document:
+    def _element_document(self, elements: Dict) -> Document:
         """
         Converts an elements into a Document object.
 
         Args:
             elements (Dict): The elements to convert.
-            start_page (int): The starting page number for splitting the document.
 
         Returns:
             A list containing a single Document object.
@@ -245,7 +244,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
         return Document(
             page_content=(parse_output(elements, self.output_type)),
             metadata={
-                "page": elements["page"] + start_page,
+                "page": elements["page"],
                 "id": elements["id"],
                 "type": self.output_type,
                 "split": self.split,
@@ -254,13 +253,12 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
             },
         )
 
-    def _page_document(self, elements: List, start_page: int) -> List[Document]:
+    def _page_document(self, elements: List) -> List[Document]:
         """
         Combines elements with the same page number into a single Document object.
 
         Args:
             elements (List): A list of elements containing page numbers.
-            start_page (int): The starting page number for splitting the document.
 
         Returns:
             List[Document]: A list of Document objects, each representing a page
@@ -282,7 +280,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
                 Document(
                     page_content=page_content,
                     metadata={
-                        "page": group[0]["page"] + start_page,
+                        "page": group[0]["page"],
                         "type": self.output_type,
                         "split": self.split,
                     },
@@ -368,7 +366,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
 
                     elements = self._split_and_request(full_docs, start_page, num_pages)
                     for element in elements:
-                        yield self._element_document(element, start_page)
+                        yield self._element_document(element)
 
                     start_page += num_pages
 
@@ -379,7 +377,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
                     elements = self._get_response({"document": f})
 
                 for element in elements:
-                    yield self._element_document(element, 0)
+                    yield self._element_document(element)
 
         elif self.split == "page":
             if is_pdf:
@@ -389,7 +387,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
                         break
 
                     elements = self._split_and_request(full_docs, start_page, num_pages)
-                    yield from self._page_document(elements, start_page)
+                    yield from self._page_document(elements)
 
                     start_page += num_pages
             else:
@@ -398,7 +396,7 @@ class UpstageLayoutAnalysisParser(BaseBlobParser):
                 with open(blob.path, "rb") as f:
                     elements = self._get_response({"document": f})
 
-                yield from self._page_document(elements, 0)
+                yield from self._page_document(elements)
 
         else:
             raise ValueError(f"Invalid split type: {self.split}")
